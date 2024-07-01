@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Imaginate Verification</title>
+    <script>
+        function submitForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: form.method,
+                body: formData,
+            }).then(response => {
+                window.location.reload()
+            }).catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</head>
+<body>
+  {% if img_found %}
+  <img src="data:image/png;base64,{{img_src}}" id="imgslot" height="500px"/>
+  <form action="/image/update-status" method="POST" enctype="multipart/form-data" onsubmit="submitForm(event)">
+    <input type="hidden" name="id" value="{{id}}">
+    <fieldset>
+      <legend>Is this image good enough?</legend> 
+      <div>
+        <input type="radio" id="verify" name="status" value="verified" checked />
+        <label for="verify">verify</label>
+      </div>
+      <div>
+        <input type="radio" id="reject" name="status" value="rejected" />
+        <label for="reject">reject</label>
+      </div>
+    </fieldset>    
+    <button type="submit">Submit</button>
+  </form>
+  <p>{{obj_data}}</p>
+  {% else %}
+  <p>no images needing verification found</p>
+  {% endif %}
+</body>
+</html>
