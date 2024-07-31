@@ -8,6 +8,8 @@ import gridfs
 # Imaginate modules
 from imaginate_api.utils import str_to_bool, validate_id, search_id, build_result
 from imaginate_api.app import create_app
+from imaginate_api.schemas.image_info import ImageStatus
+
 
 # Other
 from werkzeug.exceptions import BadRequest, NotFound, HTTPException
@@ -42,22 +44,10 @@ def mock_mongo_client():
 
 
 @pytest.fixture
-def mock_db(mock_mongo_client):
-  mock_db = mock_mongo_client["imaginate_dev"]
-  return mock_db
-
-
-@pytest.fixture
-def mock_fs(mock_db):
-  mongomock.gridfs.enable_gridfs_integration()
-  mock_fs = gridfs.GridFS(mock_db)
-  return mock_fs
-
-
-@pytest.fixture
 def mock_data():
   mock_data = [
     {
+      "_id": ObjectId(),
       "data": b"data",
       "filename": "sample",
       "type": "image/png",
@@ -71,12 +61,29 @@ def mock_data():
   return mock_data
 
 
+@pytest.fixture
+def mock_db(mock_mongo_client, mock_data):
+  mock_db = mock_mongo_client["imaginate_dev"]
+  # mock_db.create_collection('fs.files').insert_many(mock_data)
+  return mock_db
+
+
+@pytest.fixture
+def mock_fs(mock_db, mock_data):
+  mongomock.gridfs.enable_gridfs_integration()
+  mock_fs = gridfs.GridFS(mock_db)
+  for entry in mock_data:
+    mock_fs.put(**entry)
+  return mock_fs
+
+
 # Set up database before running tests
 @pytest.fixture(autouse=True)
 def setup(mock_db, mock_fs):
   with (
     patch("imaginate_api.date.routes.fs", mock_fs),
     patch("imaginate_api.image.routes.fs", mock_fs),
+    patch("imaginate_api.image.routes.db", mock_db),
     patch("imaginate_api.utils.fs", mock_fs),
   ):
     yield
@@ -107,9 +114,9 @@ def test_validate_id(image_id, expected):
     assert validate_id(image_id) == expected
 
 
-def test_search_id_success(mock_fs, mock_data):
+def test_search_id_success(mock_data, mock_fs):
   for entry in mock_data:
-    _id = mock_fs.put(**entry)
+    _id = entry["_id"]
     res = search_id(_id)
     assert res._id == _id
 
@@ -181,19 +188,19 @@ def test_post_image_create_endpoint_exception(data, expected, client):
 
 # Not testing scenarios with exceptions as they have been tested by helper functions:
 # validate_id, search_id
-def test_get_image_read_endpoint(mock_fs, mock_data, client):
+def test_get_image_read_endpoint(mock_data, client, mock_fs):
   for entry in mock_data:
-    _id = mock_fs.put(**entry)
+    _id = entry["_id"]
     res = client.get(f"/image/read/{_id}")
     assert res.status_code == HTTPStatus.OK
-    assert res.data == entry["data"]
+    assert res.get_data() == entry["data"]
 
 
 # Not testing scenarios with exceptions as they have been tested by helper functions:
 # validate_id, search_id
-def test_get_image_read_properties_endpoint(mock_fs, mock_data, client):
+def test_get_image_read_properties_endpoint(mock_data, client):
   for entry in mock_data:
-    _id = mock_fs.put(**entry)
+    _id = entry["_id"]
     res = client.get(f"/image/read/{_id}/properties")
     assert res.status_code == HTTPStatus.OK
     assert res.json == build_result(
@@ -201,9 +208,9 @@ def test_get_image_read_properties_endpoint(mock_fs, mock_data, client):
     )
 
 
-def test_get_date_images_endpoint_success(mock_fs, mock_data, client):
+def test_get_date_images_endpoint_success(mock_data, client):
   for entry in mock_data:
-    _id = mock_fs.put(**entry)
+    _id = entry["_id"]
     res = client.get(f"/date/{entry['date']}/images")
     assert res.status_code == HTTPStatus.OK
     assert res.json == [
@@ -239,22 +246,36 @@ def test_get_date_latest_endpoint_exception(client):
     assert res.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_delete_image_endpoint(mock_fs, mock_data, client):
+# Image Verification Endpoints
+
+
+# Unsure how to test this effectively as its returns a Flask Template
+def test_get_verification_portal_endpoint_success(client):
+  res = client.get("/image/verification-portal")
+  assert res.status_code == HTTPStatus.OK
+
+
+def test_post_update_status_endpoint_success(client, mock_data):
   for entry in mock_data:
-    _id = mock_fs.put(**entry)
-    res = client.delete(f"/image/{_id}")
-    assert res.status_code == HTTPStatus.OK
-    assert res.json == build_result(
-      _id, entry["real"], entry["date"], entry["theme"], entry["status"]
+    _id = str(entry["_id"])
+    data = {"_id": _id, "status": ImageStatus.VERIFIED.value}
+    res = client.post(
+      "/image/update-status", data=data, content_type="multipart/form-data"
     )
+    assert res.status_code == HTTPStatus.OK
+    assert res.json == {"_id": data["_id"]}
 
 
-def test_delete_image_success(client, mock_fs, mock_data):
-  for entry in mock_data:
-    _id = mock_fs.put(**entry)
-    res = client.delete(f"/image/{_id}")
-    assert res.status_code == 200
-
-    response_data = res.get_json()
-    res_id = response_data.get("url").split("/")[-1]
-    assert res_id == str(_id)
+@pytest.mark.parametrize(
+  "data, expected",
+  [
+    ({}, HTTPStatus.BAD_REQUEST),
+    ({"_id": "bad_id", "status": ImageStatus.VERIFIED.value}, HTTPStatus.BAD_REQUEST),
+    ({"_id": str(ObjectId()), "status": "bad_status"}, HTTPStatus.BAD_REQUEST),
+  ],
+)
+def test_post_update_status_endpoint_exception(data, expected, client, mock_data):
+  res = client.post(
+    "/image/update-status", data=data, content_type="multipart/form-data"
+  )
+  assert res.status_code == expected

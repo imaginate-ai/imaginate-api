@@ -23,11 +23,11 @@ def validate_id(image_id: str | ObjectId | bytes):
 
 # Helper function to search MongoDB ID
 def search_id(_id: ObjectId):
-  print(fs)
   res = next(fs.find({"_id": _id}), None)
-  if not res:
+  if res:
+    return res
+  else:
     abort(HTTPStatus.NOT_FOUND, "Collection not found")
-  return res
 
 
 # Helper function to build schema-matching JSON response
