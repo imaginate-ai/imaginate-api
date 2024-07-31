@@ -4,6 +4,8 @@ from imaginate_api.date.routes import bp as date_routes
 from imaginate_api.image.routes import bp as image_routes
 from imaginate_api.config import Config
 
+# Constants
+
 
 def create_app():
   app = Flask(__name__)
