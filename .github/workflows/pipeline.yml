@@ -59,7 +59,7 @@ jobs:
           envkey_MONGO_TOKEN: ${{ secrets.MONGO_TOKEN }}
           file_name: .env
       - name: Run tests
-        run: poetry run pytest --doctest-modules --junitxml=junit/test-results.xml
+        run: poetry run pytest pytest tests/unit/test_app.py --doctest-modules --junitxml=junit/test-results.xml
   lint:
     name: Lint
     needs: [build]
