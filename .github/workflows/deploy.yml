@@ -8,7 +8,7 @@ env:
   REGION: us-central1
 jobs:
   deploy:
-    name: Deploy
+    name: Deploy Containerized App
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,3 +24,7 @@ jobs:
         run: docker push ${{ secrets.CONTAINER_IMAGE_URL }}
       - name: Deploy Container to Google Cloud Run
         run: gcloud run deploy imaginate-api --image ${{ secrets.CONTAINER_IMAGE_URL }} --region ${{ env.REGION }}
+      - name: Add API Url to API Spec
+        run: python scripts/add_api_url.py openapi.yml ${{ secrets.API_URL }}
+      - name: Create and Deploy API-Config
+        run: gcloud api-gateway api-configs create api-config --api=api --openapi-spec=openapi.yml

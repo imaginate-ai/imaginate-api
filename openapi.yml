@@ -1,0 +1,39 @@
+swagger: "2.0"
+info:
+  title: api
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json/
+securityDefinitions:
+  BasicAuth:
+    type: basic
+paths:
+  /date/{day}/images:
+    get:
+      operationId: getImagesForDay
+      summary: Get images for a specific date
+      parameters:
+        - name: day
+          in: path
+          description: The day as a number of days since September 1st 2024
+          required: true
+          type: string
+      responses:
+        "200":
+          description: Successful operation
+          schema:
+            type: object
+            example:
+              - data: Base 64 Data
+                date: 1234567890
+                filename: The Filename of the Image
+                real: true
+                status: unverified
+                theme: Cat
+                url: api/image/url
+        "400":
+          description: Empty Database
+        "404":
+          description: Invalid date
